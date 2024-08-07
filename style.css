@@ -12,7 +12,7 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  flex-direction: column-reverse;
+  flex-direction: column;
 }
 
 .fieldContainer {
@@ -46,12 +46,11 @@ button {
 button:hover {
   border: 1px solid #f3f3f3;
   background: white;
-  color: #000;
+  /* color: #000; */
 }
 
 .controllersContainer {
   display: flex;
   justify-content: space-between;
-
   width: 320px;
 }

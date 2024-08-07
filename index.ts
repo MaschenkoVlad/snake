@@ -15,30 +15,39 @@ document.addEventListener("DOMContentLoaded", function (e) {
   interface IGameLvl {
     [key: string]: {
       speed: number;
-      score: [number, number];
+      score: number;
+    };
+  }
+
+  interface IGameControllers {
+    [key: string]: {
+      action: (args: MouseEvent | boolean | undefined) => void;
+      label: string;
+      id: string;
     };
   }
 
   let score: number = 0;
-  let speed: number = 1000;
+  let baseSpeed: number = 1500;
+  let speed: number = 100;
   const snakeDefaultLength: number = 4;
 
   const gameLvl: IGameLvl = {
     easy: {
-      speed: 1000,
-      score: [0, 40],
+      speed: 100,
+      score: 0,
     },
     medium: {
-      speed: 800,
-      score: [50, 90],
+      speed: 300,
+      score: 50,
     },
     hard: {
-      speed: 600,
-      score: [100, 140],
+      speed: 500,
+      score: 100,
     },
     impossible: {
-      speed: 400,
-      score: [140, 1000],
+      speed: 1000,
+      score: 200,
     },
   };
 
@@ -51,11 +60,39 @@ document.addEventListener("DOMContentLoaded", function (e) {
   let snakeTimerId: ReturnType<typeof setInterval>;
   let isGameStarted: boolean = false;
   let initialDirection: snakeDirection = snakeDirection.UP;
+  let snake: ISnakeCellPosition[] = [];
 
   const snakeContainer: HTMLDivElement | null =
     document.querySelector("#snake");
 
-  const renderSnake = (snake: ISnakeCellPosition[]) => {
+  const debounce = (func: any, timeout = 200) => {
+    let timer: ReturnType<typeof setTimeout>;
+    return (...args: any) => {
+      clearTimeout(timer);
+
+      timer = setTimeout(() => {
+        func.apply(this, args);
+      }, timeout);
+    };
+  };
+
+  const findRight = <T>(
+    arr: T[],
+    callback: (arg: T, index: number, arr: T[]) => boolean
+  ): T | undefined => {
+    const length = arr.length;
+
+    for (let i = length - 1; i >= 0; i--) {
+      const element = arr[i];
+      if (callback(element, i, arr)) {
+        return element;
+      }
+    }
+
+    return undefined;
+  };
+
+  const renderSnake = (snake: ISnakeCellPosition[]): void => {
     snake.forEach(({ x, y }) => {
       const element: HTMLElement | null = document.querySelector(
         `.cell[data-x="${x}"][data-y="${y}"]`
@@ -67,7 +104,7 @@ document.addEventListener("DOMContentLoaded", function (e) {
     });
   };
 
-  const clearLeftCell = () => {
+  const clearCells = (): void => {
     const cells: HTMLElement[] = Array.from(
       document.querySelectorAll(".cell:not([data-goal])")
     );
@@ -77,7 +114,7 @@ document.addEventListener("DOMContentLoaded", function (e) {
     );
   };
 
-  const generateField = (rows: number, cols: number) => {
+  const generateField = (rows: number, cols: number): void => {
     const fieldContainer: HTMLDivElement = document.createElement("div");
     fieldContainer.classList.add("fieldContainer");
     fieldContainer.style.width = rows * 22 + "px"; // 22 is 20px cell width + 2px left and right border
@@ -166,10 +203,10 @@ document.addEventListener("DOMContentLoaded", function (e) {
     initialFieldRows: number,
     initialFieldCols: number,
     snake: ISnakeCellPosition[]
-  ) => {
+  ): void => {
     let xGoal: number;
     let yGoal: number;
-    let isCoordsExist: ISnakeCellPosition | undefined;
+    let isSnakeCoords: ISnakeCellPosition | undefined;
 
     const existGoal: HTMLElement | null = document.querySelector(
       `.cell[data-goal=goal]`
@@ -184,8 +221,8 @@ document.addEventListener("DOMContentLoaded", function (e) {
       xGoal = Math.floor(Math.random() * initialFieldRows);
       yGoal = Math.floor(Math.random() * initialFieldCols);
 
-      isCoordsExist = snake.find(({ x, y }) => x === xGoal && y === yGoal);
-    } while (isCoordsExist);
+      isSnakeCoords = snake.find(({ x, y }) => x === xGoal && y === yGoal);
+    } while (isSnakeCoords);
 
     const element: HTMLElement | null = document.querySelector(
       `.cell[data-x="${xGoal}"][data-y="${yGoal}"]`
@@ -197,8 +234,11 @@ document.addEventListener("DOMContentLoaded", function (e) {
     }
   };
 
-  const startGame = (e: MouseEvent | null) => {
-    generateGoal(initialFieldRows, initialFieldCols, snake);
+  // TODO:
+  const startGame = (args: MouseEvent | boolean | undefined): void => {
+    if (typeof args !== "boolean") {
+      generateGoal(initialFieldRows, initialFieldCols, snake);
+    }
 
     if (isGameStarted) return;
     isGameStarted = true;
@@ -245,13 +285,18 @@ document.addEventListener("DOMContentLoaded", function (e) {
         }
       });
 
+      // 1) Check if have got the goal
+      // 2) Check if have have touched itself
       snake = snakeIntersection(getGoal(newPositions));
-      clearLeftCell();
+      // 3) Clear field for new render
+      clearCells();
+      // 4) Render new snake positions
       renderSnake(snake);
+      // 5) Update snake direction if we changed it
       snake = updateSnakeCellDirection(snake);
-
+      // 6) Update snake speed if we increased score
       updateSnakeSpeed(score, gameLvl);
-    }, speed);
+    }, baseSpeed - speed);
   };
 
   const snakeIntersection = (
@@ -259,16 +304,16 @@ document.addEventListener("DOMContentLoaded", function (e) {
   ): ISnakeCellPosition[] => {
     const head: ISnakeCellPosition = snake[0];
 
-    const intersection = snake
+    const intersection: number = snake
       .slice(1)
       .findIndex(({ x, y }) => x === head.x && y === head.y);
 
     if (intersection > 0) {
-      const newSnake = snake.slice(0, intersection + 1);
-      const newSnakeScore = newSnake.length - snakeDefaultLength;
+      const newSnake: ISnakeCellPosition[] = snake.slice(0, intersection + 1); // TODO:
+      const newSnakeScore: number = newSnake.length - snakeDefaultLength;
       score = newSnakeScore;
 
-      generateScore(score);
+      renderScore(score);
       updateSnakeSpeed(score, gameLvl);
 
       return newSnake;
@@ -277,41 +322,39 @@ document.addEventListener("DOMContentLoaded", function (e) {
     return snake;
   };
 
-  const updateSnakeSpeed = (score: number, gameLvl: IGameLvl) => {
-    const newLvl = Object.values(gameLvl).find(
-      ({ score: lvlScore }) => lvlScore[0] <= score && score <= lvlScore[1]
+  const updateSnakeSpeed = (score: number, gameLvl: IGameLvl): void => {
+    const newLvl = findRight(
+      Object.values(gameLvl),
+      ({ score: lvlScore }) => score >= lvlScore
     );
+
     const newSpeed: number | undefined = newLvl?.speed;
 
     if (newSpeed && newSpeed !== speed) {
       speed = newSpeed;
-      const startGameBtn: HTMLButtonElement | null =
-        document.querySelector("#start");
 
-      if (startGameBtn) {
-        stopGame();
-        startGameBtn.click();
-      }
+      stopGame();
+      startGame(true);
     }
   };
 
   const getGoal = (snake: ISnakeCellPosition[]): ISnakeCellPosition[] => {
-    const copy: ISnakeCellPosition[] = JSON.parse(JSON.stringify(snake));
-    const head: ISnakeCellPosition = copy[0];
+    const copySnake: ISnakeCellPosition[] = JSON.parse(JSON.stringify(snake));
+    const snakeHead: ISnakeCellPosition = copySnake[0];
 
-    const element: HTMLElement | null = document.querySelector(
-      `.cell[data-x="${head.x}"][data-y="${head.y}"][data-goal]`
+    const goalElement: HTMLElement | null = document.querySelector(
+      `.cell[data-x="${snakeHead.x}"][data-y="${snakeHead.y}"][data-goal]`
     );
 
-    if (element) {
+    if (goalElement) {
       score += 10;
-      generateScore(score);
+      renderScore(score);
 
       const {
         x,
         y,
         direction: tailDirection,
-      } = copy.at(-1) as ISnakeCellPosition;
+      } = copySnake.at(-1) as ISnakeCellPosition;
 
       switch (tailDirection) {
         case snakeDirection.UP: {
@@ -321,7 +364,7 @@ document.addEventListener("DOMContentLoaded", function (e) {
             y: y,
             direction: tailDirection,
           };
-          copy.push(elementPosition);
+          copySnake.push(elementPosition);
           break;
         }
         case snakeDirection.DOWN: {
@@ -331,7 +374,7 @@ document.addEventListener("DOMContentLoaded", function (e) {
             y: y,
             direction: tailDirection,
           };
-          copy.push(elementPosition);
+          copySnake.push(elementPosition);
           break;
         }
         case snakeDirection.RIGHT: {
@@ -341,7 +384,7 @@ document.addEventListener("DOMContentLoaded", function (e) {
             y: v > initialFieldCols - 1 ? 0 : v,
             direction: tailDirection,
           };
-          copy.push(elementPosition);
+          copySnake.push(elementPosition);
           break;
         }
         case snakeDirection.LEFT: {
@@ -351,37 +394,43 @@ document.addEventListener("DOMContentLoaded", function (e) {
             y: v < 0 ? initialFieldCols - 1 : v,
             direction: tailDirection,
           };
-          copy.push(elementPosition);
+          copySnake.push(elementPosition);
           break;
         }
       }
 
-      generateGoal(initialFieldRows, initialFieldCols, copy);
+      generateGoal(initialFieldRows, initialFieldCols, copySnake);
     }
 
-    return copy;
+    return copySnake;
   };
 
+  // Обновляем направление ячейки с конца
+  // ячейка берет направление с ячейки впереди идущей
   const updateSnakeCellDirection = (
     snake: ISnakeCellPosition[]
   ): ISnakeCellPosition[] => {
-    const copy: ISnakeCellPosition[] = JSON.parse(JSON.stringify(snake));
+    const copySnake: ISnakeCellPosition[] = JSON.parse(JSON.stringify(snake));
 
-    for (let i = copy.length - 1; i > 0; i--) {
-      copy[i].direction = copy[i - 1].direction;
+    for (let i = copySnake.length - 1; i > 0; i--) {
+      copySnake[i].direction = copySnake[i - 1].direction;
     }
 
-    return copy;
+    return copySnake;
   };
 
-  const stopGame = () => {
+  const stopGame = (): void => {
     isGameStarted = false;
     clearInterval(snakeTimerId);
   };
 
   const resetGame = () => {
     stopGame();
-    clearLeftCell();
+
+    clearCells();
+
+    score = 0;
+
     snake = initiateSnake(
       snakeDefaultLength,
       initialDirection,
@@ -390,7 +439,7 @@ document.addEventListener("DOMContentLoaded", function (e) {
     );
   };
 
-  const controllers = {
+  const controllers: IGameControllers = {
     startGame: {
       action: startGame,
       label: "START",
@@ -408,7 +457,7 @@ document.addEventListener("DOMContentLoaded", function (e) {
     },
   };
 
-  const generateControllers = () => {
+  const renderControllers = (controllers: IGameControllers): void => {
     const activeControllers = Object.values(controllers);
 
     const controllersContainer: HTMLDivElement = document.createElement("div");
@@ -425,26 +474,39 @@ document.addEventListener("DOMContentLoaded", function (e) {
       controllersContainer.appendChild(btn);
     });
 
-    snakeContainer?.appendChild(controllersContainer);
+    const scoreElement: HTMLDivElement | null =
+      document.querySelector(".scoreContainer");
+
+    if (scoreElement && snakeContainer) {
+      if (scoreElement?.nextSibling) {
+        snakeContainer.insertBefore(
+          controllersContainer,
+          scoreElement?.nextSibling
+        );
+      } else {
+        snakeContainer.appendChild(controllersContainer);
+      }
+    }
   };
 
-  const generateScore = (score: number) => {
-    const scoreContainer: HTMLDivElement | null =
+  const renderScore = (score: number): void => {
+    let scoreContainer: HTMLDivElement | null =
       document.querySelector(".scoreContainer");
 
     if (scoreContainer) {
       scoreContainer.innerHTML = `Score: ${score}`;
-      snakeContainer?.appendChild(scoreContainer);
     } else {
-      const scoreContainer: HTMLDivElement = document.createElement("div");
+      scoreContainer = document.createElement("div");
       scoreContainer.classList.add("scoreContainer");
       const scoreText: Text = document.createTextNode(`Score: ${score}`);
       scoreContainer.appendChild(scoreText);
-      snakeContainer?.appendChild(scoreContainer);
     }
+
+    snakeContainer?.insertBefore(scoreContainer, snakeContainer.firstChild);
   };
 
-  const rotateSnake = (e: KeyboardEvent) => {
+  // Is there any way to improvements?
+  const rotateSnake = (e: KeyboardEvent): void => {
     const snakeHead: ISnakeCellPosition = snake[0];
 
     if (
@@ -476,15 +538,14 @@ document.addEventListener("DOMContentLoaded", function (e) {
 
   generateField(initialFieldRows, initialFieldCols);
 
-  snakeContainer?.addEventListener("keydown", rotateSnake);
+  snakeContainer?.addEventListener("keydown", debounce(rotateSnake));
 
-  let snake: ISnakeCellPosition[] = initiateSnake(
+  renderScore(score);
+  renderControllers(controllers);
+  snake = initiateSnake(
     snakeDefaultLength,
     initialDirection,
     initialFieldRows,
     initialFieldCols
   );
-
-  generateControllers();
-  generateScore(score);
 });
